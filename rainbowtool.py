@@ -25,7 +25,7 @@ class hashes():
 class rainbowtool():
     def __init__(self):
         pass
-    def crack_with_rainbowtable(self,hashtocrack,rainbowtable,hashformat,verbose=False):
+    def crack_with_rainbowtable(self,hashtocrack,rainbowtable,verbose=False):
         for line in open(rainbowtable,'r'):
             line = line.strip()
             if hashtocrack in line:
@@ -92,7 +92,7 @@ def main():
         else:
             print("[-] Rainbow table does not exist; Try checking the file name")
             exit(1)
-        rainbowtoolObject.crack_with_rainbowtable(hashtocrack,rainbowtable,format,verbose=True)
+        rainbowtoolObject.crack_with_rainbowtable(hashtocrack,rainbowtable,verbose=True)
         
     elif arguments.wordlist and arguments.format:
         hash_function = functionDict[arguments.format]

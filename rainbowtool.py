@@ -14,10 +14,10 @@ class hashes():
         resultHash = hashlib.new('md4', text.encode('utf-16le')).hexdigest()
         return resultHash
     def md5(self,text):
-        resultHash = hashlib.md5(text.encode('utf-16le')).hexdigest()
+        resultHash = hashlib.md5(text.encode()).hexdigest()
         return resultHash
     def sha256(self,text):
-        resultHash = hashlib.sha256(text.encode('utf-16le')).hexdigest()
+        resultHash = hashlib.sha256(text.encode()).hexdigest()
         return resultHash
         
         

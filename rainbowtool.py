@@ -26,13 +26,14 @@ class rainbowtool():
     def __init__(self):
         pass
     def crack_with_rainbowtable(self,hashtocrack,rainbowtable,verbose=False):
+        hashtocrack = hashtocrack.lower()
         for line in open(rainbowtable,'r'):
             line = line.strip()
             if hashtocrack in line:
                 if line.count(":") != 1 and verbose:
                     print("[?] Encountered Invalid Line : " + line)
                 else:
-                    parsed = line.split(":")
+                    parsed = line.lower().split(":")
                     computed_hash = parsed[0]
                     if computed_hash == hashtocrack:
                         password = parsed[1]

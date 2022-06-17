@@ -1,7 +1,12 @@
 import argparse
 from os.path import isfile
+from os import remove
 import hashlib
 import binascii
+import zlib
+import zipfile
+from io import BytesIO
+import random
 
 class hashes():
     def __init__(self):
@@ -11,7 +16,7 @@ class hashes():
         for alg in self.supported:
             print("$ " + alg)
     def ntlm(self,text):
-        resultHash = hashlib.new('md4', text.encode('utf-16le')).hexdigest()
+        resultHash = hashlib.new('md4', text.encode()).hexdigest()
         return resultHash
     def md5(self,text):
         resultHash = hashlib.md5(text.encode()).hexdigest()
@@ -21,49 +26,119 @@ class hashes():
         return resultHash
         
         
+def get_random_filename(length):
+    k = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    filename = ""
+    for i in range(length):
+        filename += random.choice(k)
+    return filename
+        
         
 class rainbowtool():
     def __init__(self):
         pass
-    def crack_with_rainbowtable(self,hashtocrack,rainbowtable,verbose=False):
+    def crack_with_rainbowtable(self,hashtocrack,rainbowtable,hashformat,verbose=False,compressed=False):
         hashtocrack = hashtocrack.lower()
-        for line in open(rainbowtable,'r'):
-            line = line.strip()
-            if hashtocrack in line:
-                if line.count(":") != 1 and verbose:
-                    print("[?] Encountered Invalid Line : " + line)
-                else:
-                    parsed = line.lower().split(":")
-                    computed_hash = parsed[0]
-                    if computed_hash == hashtocrack:
-                        password = parsed[1]
-                        if verbose:
-                            print("[!!!] CRACKED : " + password)
-                        return password
+        if not compressed:
+            for line in open(rainbowtable,'r'):
+                line = line.strip()
+                if hashtocrack in line:
+                    if line.count(":") != 1 and verbose:
+                        print("[?] Encountered Invalid Line : " + line)
+                    else:
+                        parsed = line.lower().split(":")
+                        computed_hash = parsed[0]
+                        if computed_hash == hashtocrack:
+                            password = parsed[1]
+                            if verbose:
+                                print("[!!!] CRACKED : " + password)
+                            return password
+        else:
+            inzipfile = zipfile.ZipFile(rainbowtable)
+            parts = inzipfile.namelist()
+            print("[+] Compressed Parts : " + str(len(parts)))
+            for part in parts:
+                content = inzipfile.read(part)
+                content = zlib.decompress(content)
+                for line in content.split(b"\n"):
+                    try:
+                        line = line.decode()
+                        parsed = line.lower().split(":")
+                        computed_hash = parsed[0]
+                        if computed_hash == hashtocrack:
+                            password = parsed[1]
+                            if verbose:
+                                print("[!!!] CRACKED : " + password)
+                            return password
+                    except UnicodeDecodeError:
+                        pass
         print("[---] Hash not in rainbow table") # If we reach here, it means that the hash could not be cracked
                         
-    def make_rainbowtable(self,file,hashfunction,outfile=None):
+    def make_rainbowtable(self,file,hashfunction,outfile=None,compress=False):
         # makes the output file if it doesn't exist
-        if outfile != None:
-            if not isfile(outfile):
-                open(outfile,'x').close()
-            fileHandler = open(outfile,'a')
-            
-        for line in open(file,'r',errors='ignore'): # Ignores invalid characters because they're a headache to deal with, and the vast majority of passwords don't contain them anyway
+        if compress:
+            if outfile != None:
+                if not isfile(outfile):
+                    open(outfile,'x').close()
+                outputzipfile = zipfile.ZipFile(outfile,'w')
+            counter = 0
+            buf = ""
+            compressed = b""
+            bufsize = 1024
+            for line in open(file,'r',errors='ignore'):
                 line = line.strip()
                 computed_hash = hashfunction(line)
                 new_line = computed_hash + ":" + line + "\n"
-                if outfile != None:
-                    fileHandler.write(new_line)
-                else:
-                    print(new_line,end="")
-        if outfile != None:
-            fileHandler.close()   
+                counter += 1
+                buf += new_line
+                if counter == bufsize or counter > bufsize:
+                    compressed = zlib.compress(buf.encode())
+                    if outfile != None:
+                        filename = get_random_filename(15)
+                        open(filename,'x').close()
+                        open(filename,'wb').write(compressed)
+                        outputzipfile.write(filename)
+                        remove(filename)
+                    else:
+                        print(compressed)
+                    counter = 0
+                    buf = ""
+            # Deposits the remaining 1024 bytes
+            compressed = zlib.compress(buf.encode())
+            if outfile != None:
+                filename = get_random_filename(15)
+                open(filename,'x').close()
+                open(filename,'wb').write(compressed)
+                outputzipfile.write(filename)
+                remove(filename)
+            else:
+                print(compressed)
+                
+        else:
+            if outfile != None:
+                if not isfile(outfile):
+                    open(outfile,'x').close()
+                fileHandler = open(outfile,'a')
+                
+            for line in open(file,'r',errors='ignore'): # Ignores invalid characters because they're a headache to deal with, and the vast majority of passwords don't contain them anyway
+                    line = line.strip()
+                    computed_hash = hashfunction(line)
+                    new_line = computed_hash + ":" + line + "\n"
+                    if outfile != None:
+                        fileHandler.write(new_line)
+                    else:
+                        print(new_line,end="")
+            if outfile != None:
+                fileHandler.close()
+            
+            
     
 def main():    
     parser = argparse.ArgumentParser(description="Rainbowtool V1")
     misc = parser.add_argument_group('Miscellaneous')
     misc.add_argument("--listhashes",dest="listhashes",default=False,help="List supported hashing algorithms",action="store_true")
+    misc.add_argument("--compress",dest="compress",help="If the rainbow table is/should be compressed",default=False,action="store_true")
+
 
     cracking = parser.add_argument_group("Cracking")
     cracking.add_argument('--hash',dest='hashtocrack',default=False,help='The hash to crack')
@@ -93,20 +168,16 @@ def main():
         else:
             print("[-] Rainbow table does not exist; Try checking the file name")
             exit(1)
-        rainbowtoolObject.crack_with_rainbowtable(hashtocrack,rainbowtable,verbose=True)
+        rainbowtoolObject.crack_with_rainbowtable(hashtocrack,rainbowtable,format,verbose=True,compressed=arguments.compress)
         
     elif arguments.wordlist and arguments.format:
         hash_function = functionDict[arguments.format]
         if not isfile(arguments.wordlist):
             print("[-] File does not exist")
             exit(1)
-        rainbowtoolObject.make_rainbowtable(arguments.wordlist,hash_function,outfile=arguments.outfile)
+        rainbowtoolObject.make_rainbowtable(arguments.wordlist,hash_function,outfile=arguments.outfile,compress=arguments.compress)
         
             
     else:
         parser.print_help()
 main()
-    
-        
-    
-    

@@ -43,7 +43,7 @@ class rainbowtool():
             for line in open(rainbowtable,'r'):
                 line = line.strip()
                 if hashtocrack in line:
-                    if line.count(":") != 1 and verbose:
+                    if line.count(":") == 0 and verbose:
                         print("[?] Encountered Invalid Line : " + line)
                     else:
                         parsed = line.lower().split(":")
